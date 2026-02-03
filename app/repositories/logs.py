@@ -68,6 +68,24 @@ class MessageRepository:
         )
         return result.scalars().all()
     
+    async def get_latest_ai_message(
+        self,
+        db: AsyncSession,
+        chat_id: UUID,
+    ) -> Message | None:
+        """Fetch the most recent AI message for a chat"""
+
+        result = await db.execute(
+            select(Message)
+            .where(
+                Message.chat_id == chat_id,
+                Message.sender_type == SenderType.AI,
+            )
+            .order_by(desc(Message.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+    
     async def find_all(
         self,
         db: AsyncSession,
