@@ -11,15 +11,19 @@ from app.services.ai import AIService
 from app.services.document import DocumentService
 from app.schemas.logs import MessageCreate
 from app.models.logs import SenderType
+from app.langgraph.state import ResearchState
+from app.langgraph.task_classifier import classify_task
+from langchain_core.documents import Document as LCDocument
 
 @dataclass
 class ChatService:
-    """Business logic for chat model"""
+    """Business logic for chat model"""       
     chat_repository: ChatRepository
     message_repository: MessageRepository
     ai_svc: AIService
     document_svc: DocumentService
-
+    research_graph: any
+    
     async def create_chat(
     self,
     session: AsyncSession,
@@ -65,6 +69,35 @@ class ChatService:
             list[Chat]: A JSON array of chat objects
         """
         return await self.chat_repository.find_all(session)
+        
+    async def retrieve_balanced_documents(
+        self,
+        query: str,
+        document_ids: list[UUID],
+        k_per_doc: int = 3,
+    ) -> list[LCDocument]:
+        """Per-document chunk retrieval logic 
+
+        Args:
+            query (str): User query
+            document_ids (list[UUID]): List of reference documents
+            k_per_doc (int, optional): Top-k results, defaults to 3
+
+        Returns:
+            list[LCDocument]: _description_
+        """
+
+        all_docs: list[LCDocument] = []
+
+        for doc_id in document_ids:
+            docs = await self.document_svc.search(
+                query=query,
+                file_ids=[doc_id],   
+                k=k_per_doc,
+            )
+            all_docs.extend(docs)
+
+        return all_docs
 
     async def send_message(
         self,
@@ -85,11 +118,11 @@ class ChatService:
         Returns:
             Message: LLM response for the given question
         """
-        
         chat = await self.chat_repository.get_by_id(session, chat_id)
         if chat is None:
             raise ValueError(f"Chat {chat_id} not found")
         
+        task_type = await classify_task(self.ai_svc.llm, message_create.content)
         # Save user message
         user_msg = Message(
             chat_id=chat_id,
@@ -102,39 +135,47 @@ class ChatService:
         document_ids = [doc.id for doc in chat.files]
 
         # Retrieve context from documents
-        context_docs = await self.document_svc.search(
-            query=message_create.content,
-            file_ids=document_ids,
-            k=5,
-        )
+        if task_type in {"summarize", "compare", "insights"}:
+            context_docs = await self.retrieve_balanced_documents(
+                query=message_create.content,
+                document_ids=document_ids,
+                k_per_doc=3,
+            )
+        else:
+            context_docs = await self.document_svc.search(
+                query=message_create.content,
+                file_ids=document_ids,
+                k=5,
+            )
         if not context_docs:
             raise ValueError("No relevant content found in the selected documents")
 
-        # Generate AI response
-        rag_result = await self.ai_svc.generate_rag_answer(
+        # LangGraph invocation 
+        state = ResearchState(
             question=message_create.content,
             documents=context_docs,
-            history=history,
+            task_type=task_type,
         )
+        final_state = await self.research_graph.ainvoke(state)
 
         # Save AI message
         ai_msg = Message(
             chat_id=chat_id,
             sender_type=SenderType.AI,
-            content=rag_result.answer,
-            sources=rag_result.sources,
-            confidence=rag_result.confidence,
+            content = final_state.get("answer") or final_state.get("report_md"),
+            sources = final_state.get("sources", []),
+            confidence = final_state.get("confidence", 0.0),
+            report_md=final_state.get("report_md"),
         )
         session.add(ai_msg)
         if chat.name == "New Chat":
-            title = await self.ai_svc.generate_chat_title(
+            chat.name = await self.ai_svc.generate_chat_title(
                 question=message_create.content,
-                answer=rag_result.answer,
+                answer=ai_msg.content,
             )
-            chat.name = title
+        
         await session.commit()
         await session.refresh(ai_msg)
-
         return ai_msg
     
     async def find_messages(
