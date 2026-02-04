@@ -1,4 +1,3 @@
-# app/langgraph/nodes/router.py
 from app.langgraph.state import ResearchState
 
 ROUTER_PROMPT = """
