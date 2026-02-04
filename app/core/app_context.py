@@ -7,6 +7,7 @@ from app.services.document import DocumentService
 from app.services.ai import AIService
 from app.services.chat import ChatService
 from app.repositories import DocumentRepository, ChatRepository, MessageRepository
+from app.langgraph.workflow import build_research_graph
 
 class AppContext:
     """
@@ -49,7 +50,7 @@ class AppContext:
             temperature=0,
             api_key=settings.GROQ_API_KEY
         )
-        
+        self.research_graph = build_research_graph(self.llm)
 
         self.ai_svc = AIService(self.llm)
 
@@ -58,6 +59,7 @@ class AppContext:
             message_repository=self.message_repository,
             ai_svc=self.ai_svc,
             document_svc=self.document_svc,
+            research_graph=self.research_graph,
         )
 
 def create_app_context() -> AppContext:
