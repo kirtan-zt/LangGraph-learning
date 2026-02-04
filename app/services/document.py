@@ -218,13 +218,21 @@ class DocumentService:
         if not file_ids:
             return []
 
-        return await self.vector_store.asimilarity_search(
+        results= await self.vector_store.asimilarity_search_with_score(
             query=query,
             k=k,
             filter={
                 "document_id": {"$in": [str(fid) for fid in file_ids]}
             },
         )
+        RELEVANCE_THRESHOLD = 0.35
+
+        filtered_docs = [
+            doc for doc, score in results
+            if score <= RELEVANCE_THRESHOLD
+        ]
+
+        return filtered_docs
 
     async def delete(
         self,
