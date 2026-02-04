@@ -148,7 +148,23 @@ class ChatService:
                 k=5,
             )
         if not context_docs:
-            raise ValueError("No relevant content found in the selected documents")
+            return Message(
+                chat_id=chat_id,
+                sender_type=SenderType.AI,
+                content="The provided documents do not contain information to answer this question.",
+                sources=[],
+                confidence=0.15,
+            )
+
+        # Generate RAG result
+        rag_result = await self.ai_svc.generate_rag_answer(
+            question=message_create.content,
+            documents=context_docs,
+            history=history,
+            )
+
+        if rag_result.confidence < 0.2:
+            rag_result.sources = []
 
         # LangGraph invocation 
         state = ResearchState(
