@@ -20,21 +20,24 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     document_svc: DocumentService = Depends(get_document_svc),
 ):
-    """Upload a document to begin Q&A feature
+    """
+    Ingests source material from either a file upload or raw text input.
+
+    Handles binary extraction for PDFs and UTF-8 decoding for text files. 
+    The ingested content is then processed into chunks for downstream RAG operations.
 
     Args:
-        name (str, optional): Name of the document.
-        file (UploadFile | None, optional): Media upload class.
-        text (str | None, optional): Allows to insert raw text.
-        db (AsyncSession, optional): Database instance.
-        document_svc (DocumentService, optional): Document service object.
-
-    Raises:
-        HTTPException: Media input validation (pdf, text, etc.)
-        HTTPException: Format of media uploaded
+        name: Human-readable identifier for the document.
+        file: Optional multipart file upload (PDF or TXT).
+        text: Optional raw string content.
+        db: Asynchronous database session.
+        document_svc: Service orchestrating document parsing and persistence.
 
     Returns:
-        Unique Document id of uploaded document
+        JSONResponse: A success status containing the generated 'document_id'.
+
+    Raises:
+        HTTPException: 400 if no content is provided or if the file format is unsupported.
     """
     if not file and not text:
         raise HTTPException(
@@ -42,11 +45,11 @@ async def upload_document(
             detail="Either a file or raw text must be provided",
         )
 
-    # File upload
+    # Process structured file uploads
     if file:
         filename = file.filename.lower()
 
-        # PDF
+        # PDF processing path
         if filename.endswith(".pdf"):
             saved = await document_svc.save_from_pdf(
                 db=db,
@@ -58,7 +61,7 @@ async def upload_document(
                 status_code=status.HTTP_200_OK,
             )
 
-        # TXT
+        # Plain text file processing path
         if file and file.filename.lower().endswith(".txt"):
             raw_text = (await file.read()).decode("utf-8")
             saved = await document_svc.save_from_text(
@@ -76,7 +79,7 @@ async def upload_document(
             detail="Supported formats: PDF, TXT, or raw text",
         )
 
-    # Raw text
+    # Process direct text input path
     if text:
         saved = await document_svc.save_from_text(
             db=db,
@@ -93,13 +96,8 @@ async def upload_document(
 async def list_documents(
     db: AsyncSession = Depends(get_db),
 ):
-    """List uploaded documents data
-
-    Args:
-        db (AsyncSession, optional): Database instance.
-
-    Returns:
-        A JSON array of document id and their name.
+    """
+    Returns a list of all ingested documents and their metadata.
     """
     result = await db.execute(
         select(Document)
@@ -112,18 +110,14 @@ async def delete_document(
     db: AsyncSession = Depends(get_db),
     document_svc: DocumentService = Depends(get_document_svc),
 ):
-    """Delete a specific document by id 
+    """
+    Removes a document and its associated chunks from the system.
 
     Args:
-        document_id (UUID): Unique document id to delete
-        db (AsyncSession, optional): Database instance.
-        document_svc (DocumentService, optional): Document service class.
+        document_id: UUID of the target document.
 
     Raises:
-        HTTPException: Document exists validation
-
-    Returns:
-        A JSON object containing confirmation message and deleted document id
+        HTTPException: 404 if the document does not exist.
     """
     try:
         await document_svc.delete(db, document_id)

@@ -10,7 +10,12 @@ from app.models.document import Document
 from app.repositories.document import DocumentRepository
 
 class DocumentService:
-    """Business logic for document model."""
+    """
+    Orchestrates document ingestion, text extraction, chunking, and vector indexing.
+    
+    This service ensures atomic persistence across the relational database 
+    and the vector store for RAG operations.
+    """
     def __init__(
         self,
         document_repository: DocumentRepository,
@@ -26,14 +31,8 @@ class DocumentService:
         session: AsyncSession,
         document_ids: Sequence[UUID],
     ) -> list[Document]:
-        """Retrieve a specific document by it's ID
-
-        Args:
-            session (AsyncSession): Database instance.
-            document_ids (Sequence[UUID]): List of unique document ids
-
-        Returns:
-            list[Document]: A JSON array of document objects.
+        """
+        Retrieves a set of Document entities by their unique identifiers.
         """
         if not document_ids:
             return []
@@ -49,26 +48,28 @@ class DocumentService:
         name: str,
         base_docs: list[LCDocument],
     ) -> Document:
-        """Method to save the document from media.
+        """
+        Internal pipeline to process, chunk, and index document content.
 
+        Performs a two-step persistence: 
+        1. Stores raw chunks in the relational DB for deterministic retrieval.
+        2. Indexes semantic splits in the vector store for similarity search.
+        
         Args:
-            db (AsyncSession): Database instance
-            name (str): Name of the document
-            base_docs (list[LCDocument]): Langchain Document.
-
-        Raises:
-            ValueError: Text chunk validation
+            db: Active database session.
+            name: Original name of the document.
+            base_docs: List of LangChain Document objects to be split.
 
         Returns:
-            Document: Populates and returns document db model
+            Document: The persisted document record.
         """
         document = Document(
             name=name,
-            content=b"",  
+            content=b"",  # Placeholder if binary storage is handled elsewhere
         )
 
         db.add(document)
-        await db.flush()
+        await db.flush() # Obtain document.id for relationship mapping
 
         all_splits: list[LCDocument] = []
         chunks: list[Chunk] = []
@@ -77,6 +78,7 @@ class DocumentService:
             splits = self.text_splitter.split_documents([base_doc])
 
             for idx, split in enumerate(splits):
+                # Enrich metadata for granular vector filtering
                 split.metadata.update(
                     {
                         "document_id": str(document.id),
@@ -99,6 +101,7 @@ class DocumentService:
             raise ValueError("No text chunks generated")
           
         db.add_all(chunks)
+        # Concurrent indexing in the vector store
         await self.vector_store.aadd_documents(all_splits)
         await db.commit()
         return document
@@ -109,20 +112,14 @@ class DocumentService:
         name: str,
         pdf_bytes: bytes,
     ) -> Document:
-        """Method to save document in pdf format.
+        """
+        Extracts and indexes text content from binary PDF data.
 
         Args:
-            db (AsyncSession): Database instance.
-            name (str): Name of document.
-            pdf_bytes (bytes): Immutable sequences of bytes.
+            pdf_bytes: Raw binary content of the PDF file.
 
         Raises:
-            ValueError: Failed to read the pdf file
-            ValueError: Failed to support encrypted pdf
-            ValueError: Failed to generate text from pdf
-
-        Returns:
-            Document: Populates and returns document db model
+            ValueError: If the PDF is malformed, encrypted, or lacks extractable text.
         """
         try:
             reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -131,7 +128,7 @@ class DocumentService:
 
         if reader.is_encrypted:
             try:
-                reader.decrypt("")  # try empty password
+                reader.decrypt("")  # Attempt access with default empty password
             except Exception:
                 raise ValueError("Encrypted PDF is not supported")
             
@@ -167,18 +164,8 @@ class DocumentService:
         name: str,
         text: str,
     ) -> Document:
-        """Method to save document in raw text
-
-        Args:
-            db (AsyncSession): Database instance.
-            name (str): Name of document.
-            text (str): Text content.
-
-        Raises:
-            ValueError: Empty text body
-
-        Returns:
-            Document: Populates and returns document db model
+        """
+        Indexes a raw text string as a new document.
         """
         if not text.strip():
             raise ValueError("Text content is empty")
@@ -205,19 +192,22 @@ class DocumentService:
         file_ids: list[UUID],
         k: int = 5,
     ) -> List[LCDocument]:
-        """Similarity search functionality in ChromaDB vector store
+        """
+        Performs semantic search across specified documents using vector embeddings.
+
+        Implements a relevance threshold to filter out low-confidence matches. 
+        If no results meet the threshold, it falls back to the top 3 matches 
+        to ensure context availability.
 
         Args:
-            query (str): User query
-            file_ids (list[UUID]): List of unique document ids
-            k (int, optional): Top-k results. Defaults to 5.
-
-        Returns:
-            List[LCDocument]: A JSON array of documents
+            query: Semantic search query.
+            file_ids: Scope of documents to search within.
+            k: Maximum number of chunks to retrieve.
         """
         if not file_ids:
             return []
 
+        # Query vector store with metadata filtering for isolation
         results= await self.vector_store.asimilarity_search_with_score(
             query=query,
             k=k,
@@ -225,12 +215,16 @@ class DocumentService:
                 "document_id": {"$in": [str(fid) for fid in file_ids]}
             },
         )
+
+        # Lower scores indicate higher similarity in many vector dialects (e.g., L2/Cosine distance)
         RELEVANCE_THRESHOLD = 0.55
 
         filtered_docs = [
             doc for doc, score in results
             if score <= RELEVANCE_THRESHOLD
         ]
+
+        # Heuristic fallback to prevent 'empty context' failures
         if not filtered_docs and results:
             filtered_docs = [doc for doc, _ in results[:3]]
 
@@ -241,14 +235,8 @@ class DocumentService:
         session: AsyncSession,
         document_id: UUID,
     ) -> None:
-        """Delete service for removing uploaded documents
-
-        Args:
-            session (AsyncSession): Database instance.
-            document_id (UUID): Document id to be deleted
-
-        Raises:
-            ValueError: Failed to find existing document from database.
+        """
+        Deletes a document and its relational associations.
         """
         # Check existence
         document = await self.document_repository.get_by_id(

@@ -5,7 +5,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 class RAGResult(BaseModel):
-    """Stores structured LLM response for a given question"""
+    """
+    Encapsulates the structured output from the LLM after context processing.
+    """
     answer: str
     sources: List[str]
     confidence: float
@@ -43,7 +45,10 @@ RAG_PROMPT = ChatPromptTemplate.from_messages(
 
 
 class AIService:
-    """Business logic for AI response"""
+    """
+    Orchestrates LLM interactions for retrieval-augmented generation and 
+    conversation metadata synthesis.
+    """
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
 
@@ -53,18 +58,22 @@ class AIService:
         documents: List[Document],
         history: str,
     ) -> RAGResult:
-        """Generates answers from LLM for a given question 
+        """
+        Synthesizes an answer based on retrieved document chunks and chat history.
 
         Args:
-            question (str): Question from the document uploaded
-            documents (List[Document]): Reference document objects for generating answers.
+            question: The user's query.
+            documents: List of LangChain Document objects containing context and metadata.
+            history: Formatted string of previous conversation turns.
 
         Returns:
-            RAGResult: Response model to store feedback
+            RAGResult: A structured object containing the answer, unique sources, 
+                       and a heuristic confidence score.
         """
         context_blocks = []
         sources = []
 
+        # Prepare context blocks with clear source attribution for the LLM
         for doc in documents:
             file_name = doc.metadata.get("file_name", "unknown")
             chunk_idx = doc.metadata.get("chunk_index", "?")
@@ -89,6 +98,8 @@ class AIService:
 
         response = await self.llm.ainvoke(prompt)
         answer = response.content.strip()
+
+        # Simple guardrail to normalize LLM "I don't know" variations
         if any(p in answer.lower() for p in [
             "does not provide information",
             "not mentioned",
@@ -102,6 +113,8 @@ class AIService:
         )
     
         used_sources = sorted(set(sources))
+
+        # Heuristic confidence calculation based on source availability and LLM response
         confidence = (0.9 if used_sources else 0.15)
 
         return RAGResult(
@@ -111,6 +124,9 @@ class AIService:
         )
 
     async def generate_chat_title(self, question: str, answer: str) -> str:
+        """
+        Generates a concise summary title for the conversation thread.
+        """
         prompt = f"""
         Generate a short 3–6 word title summarizing this conversation.
 
