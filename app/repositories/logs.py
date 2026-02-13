@@ -5,8 +5,7 @@ from typing import Sequence, Optional, List
 from app.models.logs import Message, SenderType
 
 class MessageRepository:
-    """Storage logic for message database
-    """
+    """Storage logic for message database"""
     async def create(
         self,
         db: AsyncSession,

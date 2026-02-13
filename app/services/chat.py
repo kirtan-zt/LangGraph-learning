@@ -17,7 +17,10 @@ from langchain_core.documents import Document as LCDocument
 
 @dataclass
 class ChatService:
-    """Business logic for chat model"""       
+    """
+    Coordinates the lifecycle of chat sessions, document retrieval orchestration, 
+    and the execution of the RAG research pipeline.
+    """       
     chat_repository: ChatRepository
     message_repository: MessageRepository
     ai_svc: AIService
@@ -29,14 +32,18 @@ class ChatService:
     session: AsyncSession,
     chat_create: ChatCreate,
 ) -> Chat:
-        """Method to create chat id
+        """
+        Initializes a new chat session linked to a set of validated documents.
 
         Args:
-            session (AsyncSession): Database instance
-            chat_create (ChatCreate): Request model to store chat id
+            session: Asynchronous database session.
+            chat_create: Request schema containing document associations.
 
         Returns:
-            Chat: Dictionary that maps to Chat database 
+            Chat: The persisted Chat model instance.
+
+        Raises:
+            ValueError: If document IDs are missing or non-existent.
         """
         if not chat_create.document_ids:
             raise ValueError("At least one document_id is required")
@@ -60,13 +67,8 @@ class ChatService:
         self,
         session: AsyncSession,
     ) -> list[Chat]:
-        """Lists all chat ids from the database.
-
-        Args:
-            session (AsyncSession): Database instance.
-
-        Returns:
-            list[Chat]: A JSON array of chat objects
+        """
+        Retrieves all historical chat sessions from the repository.
         """
         return await self.chat_repository.find_all(session)
         
@@ -76,15 +78,14 @@ class ChatService:
         document_ids: list[UUID],
         k_per_doc: int = 3,
     ) -> list[LCDocument]:
-        """Per-document chunk retrieval logic 
+        """
+        Performs per-document similarity search to ensure context is sampled 
+        evenly across all associated files.
 
         Args:
-            query (str): User query
-            document_ids (list[UUID]): List of reference documents
-            k_per_doc (int, optional): Top-k results, defaults to 3
-
-        Returns:
-            list[LCDocument]: _description_
+            query: The search query string.
+            document_ids: List of specific document IDs to query.
+            k_per_doc: Number of chunks to retrieve per individual document.
         """
 
         all_docs: list[LCDocument] = []
@@ -105,25 +106,25 @@ class ChatService:
         chat_id: UUID,
         message_create: MessageCreate,
     ) -> Message:
-        """Method to send prompt to LLM from the user.
+        """
+        Orchestrates the full RAG pipeline: task classification, retrieval, 
+        LangGraph processing, and persistence.
 
         Args:
-            session (AsyncSession): Database instance.
-            chat_id (UUID): Unique chat id
-            message_create (MessageCreate): Request model object
-
-        Raises:
-            ValueError: Chat id validation check
+            chat_id: The ID of the session receiving the message.
+            message_create: Schema containing user input.
 
         Returns:
-            Message: LLM response for the given question
+            Message: The finalized AI response record.
         """
         chat = await self.chat_repository.get_by_id(session, chat_id)
         if chat is None:
             raise ValueError(f"Chat {chat_id} not found")
         
+        # Determine if the query requires standard retrieval or specialized analysis
         task_type = await classify_task(self.ai_svc.llm, message_create.content)
-        # Save user message
+        
+        # Persist user input immediately
         user_msg = Message(
             chat_id=chat_id,
             content=message_create.content,
@@ -134,7 +135,7 @@ class ChatService:
         history = await self.get_chat_history(session, chat_id)
         document_ids = [doc.id for doc in chat.files]
 
-        # Retrieve context from documents
+        # Strategic context retrieval based on task complexity
         if task_type in {"summarize", "compare", "insights"}:
             context_docs = await self.retrieve_balanced_documents(
                 query=message_create.content,
@@ -166,7 +167,7 @@ class ChatService:
         if rag_result.confidence < 0.2:
             rag_result.sources = []
 
-        # LangGraph invocation 
+        # Trigger the state-graph workflow for multi-step reasoning
         state = ResearchState(
             question=message_create.content,
             documents=context_docs,
@@ -174,7 +175,7 @@ class ChatService:
         )
         final_state = await self.research_graph.ainvoke(state)
 
-        # Save AI message
+        # Map graph output back to the database Message model
         ai_msg = Message(
             chat_id=chat_id,
             sender_type=SenderType.AI,
@@ -184,6 +185,8 @@ class ChatService:
             report_md=final_state.get("report_md"),
         )
         session.add(ai_msg)
+
+        # Update chat title if it is the first exchange
         if chat.name == "New Chat":
             chat.name = await self.ai_svc.generate_chat_title(
                 question=message_create.content,
@@ -199,14 +202,8 @@ class ChatService:
         session: AsyncSession,
         chat_id: UUID,
     ) -> list[Message]:
-        """Lists all messages in the conversation.
-
-        Args:
-            session (AsyncSession): Database instance.
-            chat_id (UUID): Unique chat id
-
-        Returns:
-            list[Message]: A JSON array of message objects.
+        """
+        Retrieves the full message history for a given chat ID.
         """
         return await self.message_repository.find_by_chat_id(session, chat_id)
     
@@ -216,6 +213,9 @@ class ChatService:
     chat_id: UUID,
     limit: int = 6,
     ) -> str:
+        """
+        Formats the most recent messages into a string for LLM context.
+        """
         messages = await self.message_repository.find_by_chat_id(session, chat_id)
 
         # last N messages
