@@ -225,12 +225,14 @@ class DocumentService:
                 "document_id": {"$in": [str(fid) for fid in file_ids]}
             },
         )
-        RELEVANCE_THRESHOLD = 0.35
+        RELEVANCE_THRESHOLD = 0.55
 
         filtered_docs = [
             doc for doc, score in results
             if score <= RELEVANCE_THRESHOLD
         ]
+        if not filtered_docs and results:
+            filtered_docs = [doc for doc, _ in results[:3]]
 
         return filtered_docs
 
