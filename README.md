@@ -89,7 +89,7 @@ LLM_MODEL=llama-3.3-70b-versatile
 
 # Vector store
 # IMPORTANT: this should be a directory path you can write to
-VECTOR_DB_PATH=/Users/ztlab93/Desktop/work/LangGraph/vectorstore
+VECTOR_DB_PATH=/your_path_to_store_vectorDB
 CHUNK_SIZE=1200
 CHUNK_OVERLAP=250
 EMBEDDING_MODEL=all-MiniLM-L6-v2
