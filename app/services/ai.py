@@ -36,7 +36,6 @@ RAG_PROMPT = ChatPromptTemplate.from_messages(
         ),
         (
             "human",
-            "Conversation history:\n{history}\n\n"
             "Document context:\n{context}\n\n"
             "Question:\n{question}",
         ),
@@ -55,16 +54,14 @@ class AIService:
     async def generate_rag_answer(
         self,
         question: str,
-        documents: List[Document],
-        history: str,
+        documents: List[Document]
     ) -> RAGResult:
         """
-        Synthesizes an answer based on retrieved document chunks and chat history.
+        Synthesizes an answer based on retrieved document chunks.
 
         Args:
             question: The user's query.
             documents: List of LangChain Document objects containing context and metadata.
-            history: Formatted string of previous conversation turns.
 
         Returns:
             RAGResult: A structured object containing the answer, unique sources, 
@@ -91,8 +88,7 @@ class AIService:
         prompt = RAG_PROMPT.invoke(
             {
                 "context": context,
-                "question": question,
-                "history": history,
+                "question": question
             }
         )
 

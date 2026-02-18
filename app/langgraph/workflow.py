@@ -49,4 +49,4 @@ def build_research_graph(llm):
     for node in ["summarize", "qa", "compare", "extract", "insights"]:
         graph.add_edge(node, END)
     
-    return graph.compile()
+    return graph.compile(name="content_research_agent")

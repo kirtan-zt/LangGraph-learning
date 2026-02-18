@@ -24,15 +24,19 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     GROQ_API_KEY: str
 
+    LANGSMITH_API_KEY: str
+    LANGSMITH_TRACING_V2: bool
+    LANGSMITH_PROJECT: str
+
     # LLM Configuration, Defaulting to Groq/Llama, but can be overridden in .env
     LLM_PROVIDER: str = "groq" 
-    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_MODEL: str 
 
      # Vector / NLP settings
     VECTOR_DB_PATH: str  
     CHUNK_SIZE: int = 1200          
     CHUNK_OVERLAP: int = 250       
-    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    EMBEDDING_MODEL: str 
 
     vector_store_collection_name: str = "knowledge_base"
 

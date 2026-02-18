@@ -8,6 +8,7 @@ from langchain_core.documents import Document as LCDocument
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.repositories.document import DocumentRepository
+from langsmith import traceable
 
 class DocumentService:
     """
@@ -186,6 +187,7 @@ class DocumentService:
             base_docs=base_docs,
         )
 
+    @traceable(name="vector_retrieval")
     async def search(
         self,
         query: str,
