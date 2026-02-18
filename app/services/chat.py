@@ -14,6 +14,7 @@ from app.models.logs import SenderType
 from app.langgraph.state import ResearchState
 from app.langgraph.task_classifier import classify_task
 from langchain_core.documents import Document as LCDocument
+from langsmith import traceable
 
 @dataclass
 class ChatService:
@@ -99,7 +100,7 @@ class ChatService:
             all_docs.extend(docs)
 
         return all_docs
-
+    @traceable(name="chat_request")
     async def send_message(
         self,
         session: AsyncSession,
@@ -132,7 +133,6 @@ class ChatService:
         )
         session.add(user_msg)
 
-        history = await self.get_chat_history(session, chat_id)
         document_ids = [doc.id for doc in chat.files]
 
         # Strategic context retrieval based on task complexity
@@ -160,8 +160,7 @@ class ChatService:
         # Generate RAG result
         rag_result = await self.ai_svc.generate_rag_answer(
             question=message_create.content,
-            documents=context_docs,
-            history=history,
+            documents=context_docs
             )
 
         if rag_result.confidence < 0.2:
@@ -206,24 +205,3 @@ class ChatService:
         Retrieves the full message history for a given chat ID.
         """
         return await self.message_repository.find_by_chat_id(session, chat_id)
-    
-    async def get_chat_history(
-    self,
-    session: AsyncSession,
-    chat_id: UUID,
-    limit: int = 6,
-    ) -> str:
-        """
-        Formats the most recent messages into a string for LLM context.
-        """
-        messages = await self.message_repository.find_by_chat_id(session, chat_id)
-
-        # last N messages
-        recent = messages[-limit:]
-
-        history = []
-        for msg in recent:
-            role = "User" if msg.sender_type == SenderType.HUMAN else "Assistant"
-            history.append(f"{role}: {msg.content}")
-
-        return "\n".join(history)

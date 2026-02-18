@@ -3,6 +3,9 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.routes import chat, document, logs
 from app.core.db import init_db
+from dotenv import load_dotenv
+load_dotenv()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

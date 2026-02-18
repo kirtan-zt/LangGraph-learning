@@ -47,7 +47,7 @@ class AppContext:
         self.llm = init_chat_model(
             model=settings.LLM_MODEL,
             model_provider=settings.LLM_PROVIDER,
-            temperature=0,
+            temperature=0.1,
             api_key=settings.GROQ_API_KEY
         )
         self.research_graph = build_research_graph(self.llm)
