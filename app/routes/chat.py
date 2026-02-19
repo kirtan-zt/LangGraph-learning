@@ -9,12 +9,13 @@ from app.services.chat import ChatService
 from app.core.dependencies import get_chat_svc, get_message_repo
 import logging
 from app.repositories.logs import MessageRepository
+from app.models.api_response import StandardResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
-@router.post("/", response_model=ChatRead)
+@router.post("/", response_model=StandardResponse[ChatRead])
 async def create_chat(
     chat_create: ChatCreate,
     db: AsyncSession = Depends(get_db),
@@ -32,8 +33,12 @@ async def create_chat(
         ChatRead: The newly created chat session record.
     """
     try:
-        chat = await chat_svc.create_chat(db, chat_create)
-        return chat
+        chat_data = await chat_svc.create_chat(db, chat_create)
+        return StandardResponse(
+            status=201,
+            message="New chat created successfully",
+            data=chat_data
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,7 +80,7 @@ async def download_report(
         },
     )
 
-@router.get("/", response_model=List[ChatRead])
+@router.get("/", response_model=StandardResponse[List[ChatRead]])
 async def get_chats(
     db: AsyncSession = Depends(get_db),
     chat_svc: ChatService = Depends(get_chat_svc),
@@ -83,10 +88,15 @@ async def get_chats(
     """
     Retrieves a paginated list of all historical chat sessions.
     """
-    return await chat_svc.find_all_chats(db)
+    get_chat_data = await chat_svc.find_all_chats(db)
+    return StandardResponse(
+        status=200,
+        message="Chat sessions retrieved successfully",
+        data=get_chat_data
+    )
 
 
-@router.post("/{chat_id}/messages", response_model=ChatResponse)
+@router.post("/{chat_id}/messages", response_model=StandardResponse[ChatResponse])
 async def send_message(
     chat_id: UUID,
     payload: MessageCreate,
@@ -122,11 +132,15 @@ async def send_message(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to generate AI response",
             )
-
-        return ChatResponse(
+        chat_response_data = ChatResponse(
             answer=message.content,
             references=message.sources,
             confidence=message.confidence,
+        )
+        return StandardResponse(
+            status=200,
+            message="LLM response generated",
+            data=chat_response_data
         )
 
     except ValueError as e:
@@ -148,7 +162,7 @@ async def send_message(
         )
 
 
-@router.get("/{chat_id}/messages", response_model=List[MessageRead])
+@router.get("/{chat_id}/messages", response_model=StandardResponse[List[MessageRead]])
 async def get_messages(
     chat_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -157,4 +171,9 @@ async def get_messages(
     """
     Retrieves the chronological message history for a specific chat session.
     """
-    return await chat_svc.find_messages(db, chat_id)
+    get_message_data = await chat_svc.find_messages(db, chat_id)
+    return StandardResponse(
+        status=200,
+        message=f"Messages retrieved for chat ID {chat_id} successfully",
+        data=get_message_data
+    )

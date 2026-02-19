@@ -5,12 +5,13 @@ from app.core.dependencies import get_message_repo
 from app.core.db import get_db
 from app.schemas.logs import MessageRead
 from app.repositories.logs import MessageRepository
+from app.models.api_response import StandardResponse
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
 message_repo = MessageRepository()
 
-@router.get("/", response_model=List[MessageRead])
+@router.get("/", response_model=StandardResponse[List[MessageRead]])
 async def read_logs(
     skip: int = 0,
     limit: int = 100,
@@ -29,4 +30,8 @@ async def read_logs(
         A JSON array of all past HUMAN-AI conversations.
     """
     messages = await message_repo.find_all(db, skip=skip, limit=limit)
-    return messages
+    return StandardResponse(
+        status=200,
+        message="Logs retrieved successfully",
+        data=messages
+    )
