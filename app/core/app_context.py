@@ -29,7 +29,12 @@ class AppContext:
         self.vector_store = Chroma(
             collection_name=settings.vector_store_collection_name,
             embedding_function=self.embeddings,
-            persist_directory=settings.VECTOR_DB_PATH, 
+            persist_directory=settings.VECTOR_DB_PATH,
+            collection_metadata={
+                "space": "cosine", # cosine similarity 
+                "M": 64, # Number of connections per node (higher=better recall)
+                "ef_construction": 200, # Controls index build quality
+            } 
         )
 
         # Repositories
