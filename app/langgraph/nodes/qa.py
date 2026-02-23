@@ -9,6 +9,7 @@ def make_qa_node(llm):
 
         prompt = f"""
 Answer the question using ONLY the context.
+You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question.
 Include page citations.
 
 Question: {state.question}

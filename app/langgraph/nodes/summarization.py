@@ -9,7 +9,8 @@ def make_summarize_node(llm):
 
         prompt = f"""
 Summarize the following content into concise bullet points.
-Each bullet must reference the page number it comes from.
+Each bullet must reference the page number it comes from. 
+Your task is to provide a comprehensive summary of the retrieved context below.
 DO NOT use markdown headings.
 
 Content:

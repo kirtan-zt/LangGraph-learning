@@ -5,6 +5,7 @@ from typing import Sequence
 from sqlalchemy.orm import selectinload
 from app.models.chat import Chat
 from app.models.document import Document
+from sqlalchemy.orm import selectinload
 
 class ChatRepository:
     """Storage logic for chats
@@ -29,8 +30,12 @@ class ChatRepository:
         db.add(chat)
         await db.flush()
         await db.commit() 
-        await db.refresh(chat)
-        return chat
+        result = await db.execute(
+            select(Chat)
+            .options(selectinload(Chat.files))
+            .where(Chat.id == chat.id)
+            )
+        return result.scalar_one()
 
     async def find_all(self, db: AsyncSession) -> Sequence[Chat]:
         """Lists all chats from storage
