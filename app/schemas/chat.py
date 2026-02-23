@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from typing import List
 from app.schemas.document import DocumentRead
@@ -18,10 +18,9 @@ class ChatRead(BaseModel):
     """
     id: UUID
     name: str
-    documents: List[DocumentRead] = Field(default_factory=list)
+    files: List[DocumentRead] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatResponse(BaseModel):
     """

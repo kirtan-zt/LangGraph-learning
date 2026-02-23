@@ -33,7 +33,7 @@ class AppContext:
             collection_metadata={
                 "space": "cosine", # cosine similarity 
                 "M": 64, # Number of connections per node (higher=better recall)
-                "ef_construction": 200, # Controls index build quality
+                "ef_construction": 200, # Controls index build quality and decides potential neighbour when new vector is inserted
             } 
         )
 

@@ -35,7 +35,7 @@ async def create_chat(
     try:
         chat_data = await chat_svc.create_chat(db, chat_create)
         return StandardResponse(
-            status=201,
+            status=200,
             message="New chat created successfully",
             data=chat_data
         )

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from datetime import datetime
 
@@ -10,5 +10,4 @@ class DocumentRead(BaseModel):
     name: str
     upload_date: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
